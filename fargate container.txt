@@ -1,0 +1,15 @@
+# 1. Utiliser une image Python légère
+FROM python:3.8-slim
+
+# 2. Définir le répertoire de travail
+WORKDIR /app
+
+# 3. Copier les fichiers de dépendances et les installer
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 4. Copier votre code (main.py, utils.py, etc.)
+COPY . .
+
+# 5. La commande qui lance votre pipeline
+CMD ["python", "main.py"]
