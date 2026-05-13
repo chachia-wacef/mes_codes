@@ -1,1 +1,1 @@
-aws s3api list-object-versions --bucket NOM_DE_VOTRE_BUCKET --prefix nom-du-dossier/ --max-items 10 --query "Versions[?IsLatest==\`false\`].{Fichier:Key, Taille:Size, Date:LastModified}" --output table
+aws s3api list-object-versions --bucket NOM_DE_VOTRE_BUCKET --prefix nom-du-dossier/ --query "sort_by(Versions[?IsLatest==\`false\`], &LastModified)[-10:].{Fichier:Key, Taille:Size, Date:LastModified}" --output table
