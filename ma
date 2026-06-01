@@ -4,7 +4,6 @@ set -ex
 # 1h d'inactivité
 IDLE_TIME=3600
 
-# Récupère le script autostop adapté (on l'écrit en local pour ne pas dépendre du repo archivé)
 cat > /home/ec2-user/SageMaker/autostop.py <<'PYEOF'
 import requests, getopt, sys, json, boto3, urllib3
 from datetime import datetime
@@ -76,10 +75,10 @@ else:
     print("Instance active : on ne fait rien.")
 PYEOF
 
-# Python de l'env système (contient boto3)
+# Python de l'env système Amazon Linux 2 (contient boto3)
 PYTHON_DIR='/home/ec2-user/anaconda3/envs/JupyterSystemEnv/bin/python'
 
 # Cron toutes les 5 min
 (crontab -l 2>/dev/null; echo "*/5 * * * * $PYTHON_DIR /home/ec2-user/SageMaker/autostop.py --time $IDLE_TIME --ignore-connections >> /var/log/jupyter.log 2>&1") | crontab -
 
-echo "Lifecycle auto-stop (après 18h, 1h d'inactivité) installée."
+echo "Lifecycle auto-stop (Amazon Linux 2 / JL4, après 18h, 1h d'inactivité) installée."
