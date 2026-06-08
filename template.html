@@ -1,0 +1,213 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+
+<style>
+  .a2i-container {
+    display: flex;
+    font-family: 'Helvetica Neue', Roboto, Arial, sans-serif;
+    height: 100vh;
+    margin: 0;
+    background-color: #f5f7fa;
+  }
+  .left-panel {
+    width: 55%;
+    padding: 15px;
+    border-right: 2px solid #e1e4e8;
+    background-color: #ffffff;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+  .right-panel {
+    width: 45%;
+    padding: 25px;
+    overflow-y: auto;
+    height: 100%;
+    box-sizing: border-box;
+  }
+  .pdf-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    background: #f6f8fa;
+    padding: 8px;
+    border: 1px solid #d0d7de;
+    border-radius: 6px 6px 0 0;
+    font-size: 14px;
+  }
+  .pdf-btn {
+    background-color: #ffffff;
+    border: 1px solid #d0d7de;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .pdf-btn:hover {
+    background-color: #f3f4f6;
+  }
+  .viewer-scroll {
+    flex-grow: 1;
+    overflow: auto;
+    border: 1px solid #d0d7de;
+    border-top: none;
+    background: #525659;
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+  }
+  #pdf-canvas {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    background: white;
+  }
+  .document-viewer-img {
+    width: 100%;
+    height: 85vh;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    object-fit: contain;
+    background: #000;
+  }
+  .form-title {
+    margin-top: 0;
+    color: #1f2328;
+    border-bottom: 1px solid #d0d7de;
+    padding-bottom: 10px;
+  }
+  .field-container {
+    margin-bottom: 20px;
+    background: #ffffff;
+    padding: 12px;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+  }
+  .field-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #24292f;
+    font-size: 14px;
+  }
+  crowd-input {
+    width: 100%;
+  }
+</style>
+
+<crowd-form>
+  <div class="a2i-container">
+    
+    <div class="left-panel">
+      {% if task.input.is_pdf %}
+        <div class="pdf-controls">
+          <button type="button" id="prev-page" class="pdf-btn">◀ Précédent</button>
+          <span>Page : <b id="page-num">1</b> / <span id="page-count">-</span></span>
+          <button type="button" id="next-page" class="pdf-btn">Suivant ▶</button>
+        </div>
+        <div class="viewer-scroll">
+          <canvas id="pdf-canvas"></canvas>
+        </div>
+      {% else %}
+        <img id="image-viewer" class="document-viewer-img" />
+      {% endif %}
+    </div>
+
+    <div class="right-panel">
+      <h2 class="form-title">Vérification des données</h2>
+      <p style="color: #57606a; font-size: 13px; margin-bottom: 20px;">
+        Modifiez les champs ci-dessous si l'extraction automatique comporte des erreurs.
+      </p>
+      
+      {% for item in task.input.extraction_data %}
+        <div class="field-container">
+          <label class="field-label">{{ item.label }}</label>
+          <crowd-input name="{{ item.label }}" value="{{ item.value }}" required></crowd-input>
+        </div>
+      {% endfor %}
+    </div>
+    
+  </div>
+</crowd-form>
+
+<script>
+  // 1. Récupération et décodage de l'URL S3 présignée
+  var urlBrute = "{{ task.input.document_url }}";
+  var decodeur = document.createElement("textarea");
+  decodeur.innerHTML = urlBrute;
+  var urlPropre = decodeur.value;
+
+  var isPdf = {% if task.input.is_pdf %} true {% else %} false {% endif %};
+
+  if (!isPdf) {
+    document.getElementById('image-viewer').src = urlPropre;
+  } else {
+    var pdfDoc = null,
+        pageNum = 1,
+        pageRendering = false,
+        pageNumPending = null,
+        scale = 1.2,
+        canvas = document.getElementById('pdf-canvas'),
+        ctx = canvas.getContext('2d');
+
+    window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    function renderPage(num) {
+      pageRendering = true;
+      pdfDoc.getPage(num).then(function(page) {
+        var viewport = page.getViewport({scale: scale});
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        var renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+        var renderTask = page.render(renderContext);
+
+        renderTask.promise.then(function() {
+          pageRendering = false;
+          if (pageNumPending !== null) {
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      });
+      document.getElementById('page-num').textContent = num;
+    }
+
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    document.getElementById('prev-page').addEventListener('click', function() {
+      if (!pdfDoc || pageNum <= 1) return;
+      pageNum--;
+      queueRenderPage(pageNum);
+    });
+
+    document.getElementById('next-page').addEventListener('click', function() {
+      if (!pdfDoc || pageNum >= pdfDoc.numPages) return;
+      pageNum++;
+      queueRenderPage(pageNum);
+    });
+
+    // Chargement propre du PDF avec le lien intact
+    var loadingTask = window['pdfjs-dist/build/pdf'].getDocument({
+      url: urlPropre,
+      withCredentials: false
+    });
+
+    loadingTask.promise.then(function(pdfDoc_) {
+      pdfDoc = pdfDoc_;
+      document.getElementById('page-count').textContent = pdfDoc.numPages;
+      renderPage(pageNum);
+    }).catch(function(error) {
+      console.error("Erreur d'affichage du PDF via PDF.js : ", error);
+    });
+  }
+</script>
