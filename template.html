@@ -1,1 +1,64 @@
 
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# ==========================================
+# 1. Configuration du modèle d'embedding (Local & Multilingue)
+# ==========================================
+print("Chargement du modèle d'embedding...")
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
+
+# ==========================================
+# 2. Chargement et Chunking du texte
+# ==========================================
+texte_transcription = """
+A: Bonjour, on peut faire un point sur le projet Alpha ?
+B: Oui, j'ai vérifié les chiffres ce matin. Le budget est dépassé de 5000 euros.
+A: Mince. Et pour la date de livraison ?
+B: Toujours prévue pour le 15 novembre.
+
+A: Parfait. Concernant la campagne marketing, où en sommes-nous ?
+B: L'agence nous a envoyé les premiers visuels hier. Je te les transfère.
+A: Super, on pourra les valider lors de la réunion de jeudi.
+"""
+
+# Découpage du texte
+text_splitter = RecursiveCharacterTextSplitter(
+    separators=["\n\n", "\n", ".", " "], 
+    chunk_size=150,   # Réduit ici pour l'exemple, à adapter (ex: 1000) pour votre vrai texte 
+    chunk_overlap=30, # Chevauchement pour garder le contexte
+    length_function=len
+)
+
+chunks = text_splitter.split_text(texte_transcription)
+print(f"Le texte a été découpé en {len(chunks)} segments.\n")
+
+# ==========================================
+# 3. Création de la base vectorielle locale (FAISS)
+# ==========================================
+print("Vectorisation des chunks en cours...")
+vector_store = FAISS.from_texts(chunks, embeddings)
+
+# ==========================================
+# 4. Recherche des Chunks Similaires
+# ==========================================
+# C'est ici que vous posez votre question développée
+question = "Je cherche à savoir si le projet Alpha respectera bien les délais prévus initialement et si on a une date précise en tête ?"
+nombre_de_chunks_souhaites = 3
+
+print(f"\nQuestion posée : '{question}'\n")
+print(f"Recherche des {nombre_de_chunks_souhaites} chunks les plus pertinents...\n")
+
+# La fonction similarity_search va comparer la question à tous les vecteurs
+resultats = vector_store.similarity_search(question, k=nombre_de_chunks_souhaites)
+
+# ==========================================
+# 5. Affichage des Résultats
+# ==========================================
+for i, chunk in enumerate(resultats):
+    print(f"--- Chunk {i + 1} ---")
+    print(chunk.page_content)
+    print()
